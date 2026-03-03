@@ -33,7 +33,7 @@ data "aws_subnets" "default" {
 }
 
 ############################################
-# ECR Repository (for ECS app images)
+# ECR Repository
 ############################################
 
 resource "aws_ecr_repository" "app" {
@@ -46,10 +46,6 @@ resource "aws_ecr_repository" "app" {
   tags = {
     Name = "hx-ecs-demo"
   }
-}
-
-output "ecr_repository_url" {
-  value = aws_ecr_repository.app.repository_url
 }
 
 ############################################
@@ -122,7 +118,7 @@ resource "aws_security_group" "ecs_sg" {
 # Application Load Balancer
 ############################################
 
-resource "aws_lb" "app" {
+resource "aws_lb" "alb" {
   name               = "hx-ecs-alb"
   load_balancer_type = "application"
   subnets            = data.aws_subnets.default.ids
@@ -137,7 +133,7 @@ resource "aws_lb" "app" {
 # Target Group
 ############################################
 
-resource "aws_lb_target_group" "app" {
+resource "aws_lb_target_group" "tg" {
   name        = "hx-ecs-tg"
   port        = 80
   protocol    = "HTTP"
@@ -164,69 +160,36 @@ resource "aws_lb_target_group" "app" {
 ############################################
 
 resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
+  load_balancer_arn = aws_lb.alb.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = aws_lb_target_group.tg.arn
   }
 }
 
 ############################################
-# ECS Task Definition (Fargate)
+# Outputs (Shared with App Workspace)
 ############################################
 
-resource "aws_ecs_task_definition" "app" {
-  family                   = "hx-ecs-task"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "nginx"
-      image     = "nginx:latest"
-      essential = true
-      portMappings = [
-        {
-          containerPort = 80
-          hostPort      = 80
-        }
-      ]
-    }
-  ])
+output "ecs_cluster_name" {
+  value = aws_ecs_cluster.main.name
 }
 
-############################################
-# ECS Service (Fargate)
-############################################
+output "target_group_name" {
+  value = aws_lb_target_group.tg.name
+}
 
-resource "aws_ecs_service" "app" {
-  name            = "hx-ecs-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+output "security_group_name" {
+  value = aws_security_group.ecs_sg.name
+}
 
-  network_configuration {
-    subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_sg.id]
-    assign_public_ip = true
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app.arn
-    container_name   = "nginx"
-    container_port   = 80
-  }
-
-  depends_on = [aws_lb_listener.http]
+output "execution_role_arn" {
+  value = aws_iam_role.ecs_task_execution_role.arn
 }
 
 output "alb_dns_name" {
-  value = aws_lb.app.dns_name
+  value = aws_lb.alb.dns_name
 }
