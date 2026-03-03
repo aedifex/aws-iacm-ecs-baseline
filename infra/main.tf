@@ -102,6 +102,14 @@ resource "aws_security_group" "ecs_sg" {
     cidr_blocks = ["0.0.0.0/0"] # POV only
   }
 
+  ingress {
+    description = "Allow app traffic"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -134,11 +142,12 @@ resource "aws_lb" "alb" {
 ############################################
 
 resource "aws_lb_target_group" "tg" {
-  name        = "hx-ecs-tg"
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.default.id
-  target_type = "ip"
+  name                 = "hx-ecs-tg"
+  port                 = 3000
+  protocol             = "HTTP"
+  vpc_id               = data.aws_vpc.default.id
+  target_type          = "ip"
+  deregistration_delay = 30
 
   health_check {
     path                = "/"
